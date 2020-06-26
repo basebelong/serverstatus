@@ -1,0 +1,12 @@
+Author: Jonas Hendrikson 2018 (jonas@hendrikson.se)
+Updated: 2019-12-16
+
+Checks if services responds to connections with curl.
+Presents a nice table with colors. Autoupdates every minute.
+
+Urls are hardcoded to the script in an associative array.
+
+Includes a report mode for non interactive use.
+
+Harcoded list of sites.
+
