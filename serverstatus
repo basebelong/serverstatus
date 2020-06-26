@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+
+# Author: Jonas Hendrikson 2018 (jonas@hendrikson.se)
+# Updated: 2019-12-16
+#
+# Checks if services responds to connections with curl.
+# Presents a nice table with colors. Autoupdates every minute.
+#
+# Urls are hardcoded to the script in an associative array.
+#
+# Includes a report mode for non interactive use.
+
+# Harcoded list of sites.
+# TODO: Add ability to read from config file.
+
+declare -A urls=(
+	[Hacker News]="https://news.ycombinator.com"
+	[Slashdot]="https://slashdot.org"
+	[Yahoo]="https://yahoo.com"
+	[Nonexisting]="https://foobar.example.com"
+	[Arch Wiki]="https://wiki.archlinux.org"
+)
+
+healthCheckHttp () {
+	curl --connect-timeout 2 -s -f $1 > /dev/null 2>&1
+}
+
+printStatus () {
+	local position=$(( $(tput cols)-8-$(("${#service}" )) ))
+	local j=0
+	if [[ "$1" == "OK" ]]; then
+		while (( j < $position )); do
+			echo -n " " >> $printbuffer
+			(( ++j ))
+		done
+		echo -e "[  \033[0;32mOK \033[0m ]" >> $printbuffer
+	elif [[ "$1" == "FAIL" ]]; then
+		echo -n " " >> $printbuffer
+		while (( j < (($position - 2)) )); do
+			echo -n "-" >> $printbuffer
+			(( ++j ))
+		done
+		echo -e " [ \033[0;31mFAIL \033[0m]" >> $printbuffer
+	fi
+}
+
+printStatusReport () {
+	local position=$(( $(tput cols)-8-$(("${#service}" )) ))
+	local j=0
+	if [[ "$1" == "OK" ]]; then
+		while (( j < $position )); do
+			echo -n " " >> $printbuffer
+			(( ++j ))
+		done
+		echo -e "[  OK  ]" >> $printbuffer
+	elif [[ "$1" == "FAIL" ]]; then
+		echo -n " " >> $printbuffer
+		while (( j < (($position - 2)) )); do
+			echo -n " " >> $printbuffer
+			(( ++j ))
+		done
+		echo -e " [ FAIL ]" >> $printbuffer
+	fi
+}
+
+# END FUNCTIONS
+# main
+
+printbuffer=$(mktemp "/tmp/$(basename $0).XXXXXXXXX")
+trap "rm $printbuffer; exit" 1 2 3 15
+
+# Usage. Användning. (-h || --help)
+if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
+	echo "Usage: serverstatus [OPTION]"
+	echo ""
+	echo "Shows status of webservers."
+	echo "Using no OPTIONS gives color output."
+	echo "Updates every 60 seconds."
+	echo ""
+	echo "OK   = Responds within 2 seconds."
+	echo "FAIL = Responds with error code or times out at 2 seconds."
+	echo ""
+	echo "Following OPTIONS are available:"
+	echo "  -h, --help     This text."
+	echo "  -r, --report   Print out a report (usable for pipes)."
+	exit 0
+fi
+
+# Report mode (-r || --report)
+if [[ "$1" == "-r" ]] || [[ "$1" == "--report" ]]; then
+	for service in "${!urls[@]}"; do
+		printf '%s' "$service" >> $printbuffer
+		healthCheckHttp "${urls[$service]}" 2>/dev/null &&
+		printStatusReport "OK" ||
+		printStatusReport "FAIL"
+	done 
+
+	sort $printbuffer
+	exit 0
+fi
+
+# Interactive mode. Default.
+echo "Fetching stats for $(( "${#urls[@]}" )) sites..."
+
+while true; do
+	echo -n "" > $printbuffer
+	for service in "${!urls[@]}"; do
+		printf '%s' "$service" >> $printbuffer
+		healthCheckHttp "${urls[$service]}" &&
+		printStatus "OK" ||
+		printStatus "FAIL"
+	done 
+
+	clear
+	sort $printbuffer
+	echo ""
+	echo -n "Last updated $(date '+%F %R:%S')"
+	sleep 60
+	echo -n ". Fetching new stats..."
+done
+
+exit 0
+
